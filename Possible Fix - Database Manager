@@ -1,0 +1,139 @@
+To solve the issue of adding a new local tool—a **Database Manager**—I will guide you on how to implement the tool in your codebase. This Database Manager will allow users to connect to a database, execute SQL commands, and disconnect from the database.
+
+Solution Overview:
+1. Connect to a Database: This function will accept database credentials and return a connection ID.
+2. Execute a Command: This function will take the connection ID, SQL command, and a timeout as inputs, execute the command, and return the output.
+3. Disconnect: This function will disconnect from the database using the connection ID.
+
+### Steps to Implement the Database Manager
+
+1. **Create a `DatabaseManager` class** that handles all the above-mentioned actions.
+
+### Code Implementation
+
+#### 1. **Creating the `DatabaseManager` Class**
+
+```python
+import sqlite3
+from typing import Dict, Any
+
+class DatabaseManager:
+    def __init__(self):
+        self.connections = {}  # Store connection IDs with connection objects
+    
+    def connect_to_db(self, db_path: str) -> str:
+        """
+        Connect to the database and return a connection ID.
+        
+        :param db_path: Path to the database file.
+        :return: Connection ID (unique string)
+        """
+        conn = sqlite3.connect(db_path)
+        conn_id = str(id(conn))  # Create a unique ID based on the connection object.
+        self.connections[conn_id] = conn
+        return conn_id
+
+    def execute_command(self, conn_id: str, sql_command: str, timeout: int = 30) -> Dict[str, Any]:
+        """
+        Execute an SQL command and return the result or error.
+        
+        :param conn_id: The ID of the connection.
+        :param sql_command: The SQL command to execute.
+        :param timeout: The maximum time allowed for executing the command.
+        :return: A dictionary containing the result or error.
+        """
+        if conn_id not in self.connections:
+            return {"error": "Invalid connection ID"}
+        
+        conn = self.connections[conn_id]
+        conn.set_timeout(timeout)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(sql_command)
+            conn.commit()  # Commit if it's a write operation.
+            result = cursor.fetchall()  # Fetch the results for read operations.
+            return {"result": result}
+        except sqlite3.Error as e:
+            return {"error": str(e)}
+    
+    def disconnect(self, conn_id: str) -> str:
+        """
+        Disconnect from the database using the connection ID.
+        
+        :param conn_id: The ID of the connection.
+        :return: Success message or error if connection ID is invalid.
+        """
+        if conn_id in self.connections:
+            conn = self.connections.pop(conn_id)
+            conn.close()
+            return f"Connection {conn_id} closed successfully."
+        else:
+            return "Invalid connection ID."
+```
+
+#### 2. **Explaining the Key Components:**
+
+- **`connect_to_db`**: Connects to the database using a provided path (`db_path`) and returns a unique connection ID. The connection is stored in the `self.connections` dictionary, where each ID maps to its connection object.
+- **`execute_command`**: Executes an SQL command using the connection ID. It checks for valid connection IDs, executes the SQL command, and returns the result or an error. It allows for a timeout, which can be adjusted.
+- **`disconnect`**: Disconnects from the database and removes the connection from the dictionary based on the connection ID.
+
+### 3. **Unit Testing the Database Manager**
+
+To ensure your changes work as expected, create unit tests to test connecting, executing commands, and disconnecting from the database.
+
+```python
+import unittest
+
+class TestDatabaseManager(unittest.TestCase):
+
+    def setUp(self):
+        self.db_manager = DatabaseManager()
+        self.db_path = ":memory:"  # Use an in-memory database for testing.
+    
+    def test_connect_to_db(self):
+        conn_id = self.db_manager.connect_to_db(self.db_path)
+        self.assertTrue(conn_id in self.db_manager.connections)
+
+    def test_execute_command(self):
+        conn_id = self.db_manager.connect_to_db(self.db_path)
+        create_table_cmd = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"
+        result = self.db_manager.execute_command(conn_id, create_table_cmd)
+        self.assertEqual(result, {"result": []})  # No result expected for a create table command.
+
+    def test_disconnect(self):
+        conn_id = self.db_manager.connect_to_db(self.db_path)
+        msg = self.db_manager.disconnect(conn_id)
+        self.assertEqual(msg, f"Connection {conn_id} closed successfully.")
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+### 4. **Changes to Make in Your Files**
+
+#### **New File: `tools/database_manager.py`**
+This file will contain the `DatabaseManager` class as defined above.
+
+#### **Changes to `contributing.md`:**
+Add a section that describes how contributors can extend the `DatabaseManager` or work on similar local tools for database-related functionalities.
+
+#### **Usage Example:**
+
+```python
+from tools.database_manager import DatabaseManager
+
+# Initialize DatabaseManager
+db_manager = DatabaseManager()
+
+# Connect to a SQLite database
+conn_id = db_manager.connect_to_db("test.db")
+
+# Execute SQL command
+result = db_manager.execute_command(conn_id, "CREATE TABLE users (id INTEGER, name TEXT)")
+print(result)
+
+# Disconnect
+msg = db_manager.disconnect(conn_id)
+print(msg)
+```
